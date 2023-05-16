@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 /**
  * Fingerprint Locations
  *
@@ -5,25 +6,34 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  SafeAreaView,
+  Provider as PaperProvider,
+  MD3LightTheme as LightTheme,
+  Button,
+  Text,
+  Surface,
+  ProgressBar,
+} from 'react-native-paper';
+import {
   StyleSheet,
   View,
-  Text,
   StatusBar,
   NativeModules,
   NativeEventEmitter,
   Platform,
   PermissionsAndroid,
   FlatList,
-  TouchableHighlight,
-  Pressable,
+  TouchableOpacity,
+  SafeAreaView,
 } from 'react-native';
-
-import { Colors } from 'react-native/Libraries/NewAppScreen';
 
 const SECONDS_TO_SCAN_FOR = 7;
 const SERVICE_UUIDS: string[] = [];
 const ALLOW_DUPLICATES = true;
+
+const theme = {
+  ...LightTheme,
+  roundness: 3,
+};
 
 import BleManager, {
   BleDisconnectPeripheralEvent,
@@ -33,6 +43,9 @@ import BleManager, {
   BleScanMode,
   Peripheral,
 } from 'react-native-ble-manager';
+import ScreenWrapper from './components/common/ScreenWrapper';
+import { mapRssiToProgress } from './components/utils/helpers';
+
 const BleManagerModule = NativeModules.BleManager;
 const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
 
@@ -48,6 +61,66 @@ const App = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [peripherals, setPeripherals] = useState(
     new Map<Peripheral['id'], Peripheral>(),
+  );
+  const [mockPeri, setMockPeri] = useState(
+    new Map<Peripheral['id'], Peripheral>([
+      [
+        'DC:0D:30:14:51:1D',
+        {
+          id: 'DC:0D:30:14:51:1D',
+          name: 'FSC-BP109T',
+          rssi: -55,
+          advertising: {
+            localName: 'FSC-BP109T',
+            serviceUUIDs: ['fef6'],
+            isConnectable: true,
+          },
+          connected: false,
+        },
+      ],
+      [
+        'DC:0D:30:14:51:1C',
+        {
+          id: 'DC:0D:30:14:51:1C',
+          name: 'FSC-BP110T',
+          rssi: -79,
+          advertising: {
+            localName: 'FSC-BP110T',
+            serviceUUIDs: ['fef7'],
+            isConnectable: true,
+          },
+          connected: true,
+        },
+      ],
+      [
+        'DC:0D:30:14:51:1B',
+        {
+          id: 'DC:0D:30:14:51:1B',
+          name: 'FSC-BP111T',
+          rssi: -45,
+          advertising: {
+            localName: 'FSC-BP111T',
+            serviceUUIDs: ['fef8'],
+            isConnectable: true,
+          },
+          connected: false,
+        },
+      ],
+      [
+        'DC:0D:30:14:51:1A',
+        {
+          id: 'DC:0D:30:14:51:1A',
+          name: 'FSC-BP112T',
+          rssi: -33,
+          advertising: {
+            localName: 'FSC-BP112T',
+            serviceUUIDs: ['fef9'],
+            isConnectable: false,
+          },
+          connected: true,
+        },
+      ],
+    ]),
   );
 
   console.debug('peripherals map updated', [...peripherals.entries()]);
@@ -150,7 +223,10 @@ const App = () => {
 
       for (var i = 0; i < connectedPeripherals.length; i++) {
         var peripheral = connectedPeripherals[i];
-        addOrUpdatePeripheral(peripheral.id, { ...peripheral, connected: true });
+        addOrUpdatePeripheral(peripheral.id, {
+          ...peripheral,
+          connected: true,
+        });
       }
     } catch (error) {
       console.error(
@@ -163,7 +239,10 @@ const App = () => {
   const connectPeripheral = async (peripheral: Peripheral) => {
     try {
       if (peripheral) {
-        addOrUpdatePeripheral(peripheral.id, { ...peripheral, connecting: true });
+        addOrUpdatePeripheral(peripheral.id, {
+          ...peripheral,
+          connecting: true,
+        });
 
         await BleManager.connect(peripheral.id);
         console.debug(`[connectPeripheral][${peripheral.id}] connected.`);
@@ -315,147 +394,93 @@ const App = () => {
   };
 
   const renderItem = ({ item }: { item: Peripheral }) => {
-    const backgroundColor = item.connected ? '#069400' : Colors.white;
+    const progress = mapRssiToProgress(item.rssi)
     return (
-      <TouchableHighlight
-        underlayColor="#0082FC"
-        onPress={() => togglePeripheralConnection(item)}>
-        <View style={[styles.row, { backgroundColor }]}>
-          <Text style={styles.peripheralName}>
-            {/* completeLocalName (item.name) & shortAdvertisingName (advertising.localName) may not always be the same */}
-            {item.name} - {item?.advertising?.localName}
-            {item.connecting && ' - Connecting...'}
-          </Text>
-          <Text style={styles.rssi}>RSSI: {item.rssi}</Text>
-          <Text style={styles.peripheralId}>{item.id}</Text>
-        </View>
-      </TouchableHighlight>
+      <>
+        <Surface style={style.surface} elevation={2}>
+          <View style={style.viewInsideSurface}>
+            <Text>{item.name}</Text>
+            <Text>{item.id}</Text>
+            <Text>{item.advertising.serviceUUIDs}</Text>
+            <Text>{item.rssi}</Text>
+          </View>
+
+          <View>
+            <ProgressBar progress={progress} color={LightTheme.colors.error} />
+          </View>
+        </Surface>
+      </>
     );
   };
 
   return (
     <>
-      <StatusBar />
-      <SafeAreaView style={styles.body}>
-        <Pressable style={styles.scanButton} onPress={startScan}>
-          <Text style={styles.scanButtonText}>
+      <PaperProvider theme={theme}>
+        <ScreenWrapper withScrollView={false} style={{ padding: 4 }}>
+          <Button style={style.button} mode="outlined" onPress={startScan}>
             {isScanning ? 'Scanning...' : 'Scan Bluetooth'}
-          </Text>
-        </Pressable>
+          </Button>
 
-        <Pressable style={styles.scanButton} onPress={retrieveConnected}>
-          <Text style={styles.scanButtonText}>
+          <Button
+            style={style.button}
+            mode="outlined"
+            onPress={retrieveConnected}>
             {'Retrieve connected peripherals'}
-          </Text>
-        </Pressable>
+          </Button>
 
-        {Array.from(peripherals.values()).length === 0 && (
-          <View style={styles.row}>
-            <Text style={styles.noPeripherals}>
-              No Peripherals, press "Scan Bluetooth" above.
-            </Text>
-          </View>
-        )}
-
-        <FlatList
-          data={Array.from(peripherals.values())}
-          contentContainerStyle={{ rowGap: 12 }}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-        />
-      </SafeAreaView>
+          {Array.from(peripherals.values()).length === 0 && (
+            <View>
+              <Text>No Peripherals, press "Scan Bluetooth" above.</Text>
+              <SafeAreaView style={style.center}>
+                <FlatList
+                  data={Array.from(mockPeri.values())}
+                  contentContainerStyle={{ rowGap: 12 }}
+                  renderItem={renderItem}
+                  keyExtractor={item => item.id}
+                />
+              </SafeAreaView>
+              <Text variant="titleMedium">TEXT</Text>
+              <ProgressBar progress={0.5} />
+            </View>
+          )}
+          <FlatList
+            data={Array.from(peripherals.values())}
+            contentContainerStyle={{ rowGap: 12 }}
+            renderItem={renderItem}
+            keyExtractor={item => item.id}
+          />
+          <StatusBar />
+        </ScreenWrapper>
+      </PaperProvider>
     </>
   );
 };
 
-const boxShadow = {
-  shadowColor: '#000',
-  shadowOffset: {
-    width: 0,
-    height: 2,
-  },
-  shadowOpacity: 0.25,
-  shadowRadius: 3.84,
-  elevation: 5,
-};
-
-const styles = StyleSheet.create({
-  engine: {
-    position: 'absolute',
-    right: 10,
-    bottom: 0,
-    color: Colors.black,
-  },
-  scanButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    backgroundColor: '#0a398a',
-    margin: 10,
-    borderRadius: 12,
-    ...boxShadow,
-  },
-  scanButtonText: {
-    fontSize: 20,
-    letterSpacing: 0.25,
-    color: Colors.white,
-  },
-  body: {
-    backgroundColor: '#0082FC',
+const style = StyleSheet.create({
+  container: {
     flex: 1,
   },
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.black,
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-    color: Colors.dark,
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-  footer: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '600',
+  button: {
+    margin: 8,
     padding: 4,
-    paddingRight: 12,
-    textAlign: 'right',
   },
-  peripheralName: {
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 10,
+  surface: {
+    padding: 4,
+    height: 50,
+    minWidth: '90%',
   },
-  rssi: {
-    fontSize: 12,
-    textAlign: 'center',
-    padding: 2,
-  },
-  peripheralId: {
-    fontSize: 12,
-    textAlign: 'center',
-    padding: 2,
-    paddingBottom: 20,
-  },
-  row: {
-    marginLeft: 10,
-    marginRight: 10,
-    borderRadius: 20,
-    ...boxShadow,
-  },
-  noPeripherals: {
+  viewInsideSurface: {
     margin: 10,
-    textAlign: 'center',
-    color: Colors.white,
+    minWidth: '80%',
+    backgroundColor: 'lightblue',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-around',
   },
 });
 
